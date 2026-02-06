@@ -1,0 +1,278 @@
+// Prisma schema for Vandra - Flight Deal SaaS Platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// User & Authentication
+// ============================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime? @map("email_verified")
+  passwordHash  String?   @map("password_hash")
+  name          String?
+  phone         String?
+  phoneVerified Boolean   @default(false) @map("phone_verified")
+  image         String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  accounts      Account[]
+  sessions      Session[]
+  flightAlerts  FlightAlert[]
+  subscription  Subscription?
+  conversations Conversation[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model PasswordResetToken {
+  id      String   @id @default(cuid())
+  userId  String   @map("user_id")
+  token   String   @unique
+  expires DateTime
+
+  @@map("password_reset_tokens")
+}
+
+// ============================================
+// Flight Alerts
+// ============================================
+
+model FlightAlert {
+  id              String      @id @default(cuid())
+  userId          String      @map("user_id")
+  originCode      String      @map("origin_code") @db.Char(3)
+  destinationCode String?     @map("destination_code") @db.Char(3)
+  maxPrice        Decimal?    @map("max_price") @db.Decimal(10, 2)
+  minDiscount     Int?        @map("min_discount")
+  departureAfter  DateTime?   @map("departure_after")
+  departureBefore DateTime?   @map("departure_before")
+  status          AlertStatus @default(active)
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+
+  // Natural language preferences (stored as user described them)
+  destinationText String?     @map("destination_text")  // e.g., "Europe", "anywhere warm", "Japan"
+  timingText      String?     @map("timing_text")       // e.g., "spring", "flexible", "next 3 months"
+  priceText       String?     @map("price_text")        // e.g., "under $650", "cheap", "good deals"
+  summary         String?                                // AI-generated summary for display
+
+  // Relations
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  origin        Airport              @relation("AlertOrigin", fields: [originCode], references: [code])
+  destination   Airport?             @relation("AlertDestination", fields: [destinationCode], references: [code])
+  notifications FlightNotification[]
+
+  @@index([userId])
+  @@index([originCode])
+  @@index([status])
+  @@index([userId, status])
+  @@map("flight_alerts")
+}
+
+enum AlertStatus {
+  active
+  paused
+  expired
+}
+
+// ============================================
+// Airport Reference Data
+// ============================================
+
+model Airport {
+  code      String  @id @db.Char(3)
+  name      String
+  city      String
+  country   String
+  latitude  Decimal @db.Decimal(9, 6)
+  longitude Decimal @db.Decimal(9, 6)
+  timezone  String
+
+  // Relations
+  originAlerts      FlightAlert[] @relation("AlertOrigin")
+  destinationAlerts FlightAlert[] @relation("AlertDestination")
+
+  @@index([city])
+  @@index([country])
+  @@map("airports")
+}
+
+// ============================================
+// Conversation & Chat
+// ============================================
+
+model Conversation {
+  id        String             @id @default(cuid())
+  userId    String             @map("user_id")
+  status    ConversationStatus @default(active)
+  createdAt DateTime           @default(now()) @map("created_at")
+  updatedAt DateTime           @updatedAt @map("updated_at")
+
+  // Relations
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@index([userId])
+  @@map("conversations")
+}
+
+enum ConversationStatus {
+  active
+  completed
+  abandoned
+}
+
+model Message {
+  id             String      @id @default(cuid())
+  conversationId String      @map("conversation_id")
+  role           MessageRole
+  content        String      @db.Text
+  createdAt      DateTime    @default(now()) @map("created_at")
+
+  // Relations
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@map("messages")
+}
+
+enum MessageRole {
+  user
+  assistant
+  system
+}
+
+// ============================================
+// Subscription & Billing
+// ============================================
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  userId               String             @unique @map("user_id")
+  stripeCustomerId     String             @unique @map("stripe_customer_id")
+  stripeSubscriptionId String?            @unique @map("stripe_subscription_id")
+  plan                 Plan               @default(free)
+  status               SubscriptionStatus @default(active)
+  currentPeriodEnd     DateTime?          @map("current_period_end")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+enum Plan {
+  free
+  starter
+  pro
+}
+
+enum SubscriptionStatus {
+  active
+  canceled
+  past_due
+  unpaid
+}
+
+// ============================================
+// Notifications
+// ============================================
+
+model FlightNotification {
+  id         String              @id @default(cuid())
+  alertId    String              @map("alert_id")
+  flightData Json                @map("flight_data")
+  sentAt     DateTime            @default(now()) @map("sent_at")
+  channel    NotificationChannel
+  status     NotificationStatus  @default(sent)
+
+  // Relations
+  alert FlightAlert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  @@index([alertId])
+  @@index([sentAt])
+  @@map("flight_notifications")
+}
+
+enum NotificationChannel {
+  sms
+  email
+  push
+}
+
+enum NotificationStatus {
+  sent
+  delivered
+  failed
+}
+
+// ============================================
+// Price History (for deal detection)
+// ============================================
+
+model PriceHistory {
+  id          String   @id @default(cuid())
+  origin      String   @db.Char(3)
+  destination String   @db.Char(3)
+  travelDate  DateTime @map("travel_date")
+  price       Decimal  @db.Decimal(10, 2)
+  airline     String?
+  recordedAt  DateTime @default(now()) @map("recorded_at")
+
+  @@index([origin, destination, travelDate])
+  @@index([recordedAt])
+  @@map("price_history")
+}

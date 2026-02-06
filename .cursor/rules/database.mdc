@@ -1,0 +1,432 @@
+---
+description: Prisma and PostgreSQL database rules for Vandra
+globs: ["prisma/**/*", "src/lib/db/**/*", "**/*.prisma"]
+alwaysApply: false
+---
+
+# Database Rules
+
+## Prisma Schema Conventions
+
+### Model Naming
+
+```prisma
+// Models: PascalCase, singular
+model User {
+  id String @id @default(cuid())
+}
+
+model FlightAlert {
+  id String @id @default(cuid())
+}
+
+// Table names: snake_case (via @@map)
+model FlightAlert {
+  id String @id @default(cuid())
+  
+  @@map("flight_alerts")
+}
+```
+
+### Field Naming
+
+```prisma
+model User {
+  // Fields: camelCase
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String   @map("password_hash")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  
+  // Relations: camelCase, descriptive
+  flightAlerts  FlightAlert[]
+  subscription  Subscription?
+  
+  @@map("users")
+}
+```
+
+### Standard Fields
+
+Every model should have:
+
+```prisma
+model Example {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  @@map("examples")
+}
+```
+
+## Vandra Data Models
+
+### Core Schema Structure
+
+```prisma
+// User and authentication
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String    @map("password_hash")
+  name          String?
+  phone         String?   // For SMS notifications
+  phoneVerified Boolean   @default(false) @map("phone_verified")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  
+  // Relations
+  flightAlerts  FlightAlert[]
+  subscription  Subscription?
+  conversations Conversation[]
+  
+  @@map("users")
+}
+
+// Flight alert preferences
+model FlightAlert {
+  id              String    @id @default(cuid())
+  userId          String    @map("user_id")
+  originCode      String    @map("origin_code") @db.Char(3)
+  destinationCode String?   @map("destination_code") @db.Char(3)
+  maxPrice        Decimal?  @map("max_price") @db.Decimal(10, 2)
+  minDiscount     Int?      @map("min_discount") // Percentage
+  departureAfter  DateTime? @map("departure_after")
+  departureBefore DateTime? @map("departure_before")
+  status          AlertStatus @default(active)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  
+  // Relations
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  origin          Airport   @relation("AlertOrigin", fields: [originCode], references: [code])
+  destination     Airport?  @relation("AlertDestination", fields: [destinationCode], references: [code])
+  notifications   FlightNotification[]
+  
+  @@index([userId])
+  @@index([originCode])
+  @@index([status])
+  @@map("flight_alerts")
+}
+
+enum AlertStatus {
+  active
+  paused
+  expired
+}
+
+// Airport reference data
+model Airport {
+  code      String   @id @db.Char(3)
+  name      String
+  city      String
+  country   String
+  latitude  Decimal  @db.Decimal(9, 6)
+  longitude Decimal  @db.Decimal(9, 6)
+  timezone  String
+  
+  // Relations
+  originAlerts      FlightAlert[] @relation("AlertOrigin")
+  destinationAlerts FlightAlert[] @relation("AlertDestination")
+  
+  @@index([city])
+  @@index([country])
+  @@map("airports")
+}
+
+// Conversation history for AI chat
+model Conversation {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  status    ConversationStatus @default(active)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  
+  // Relations
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  Message[]
+  
+  @@index([userId])
+  @@map("conversations")
+}
+
+enum ConversationStatus {
+  active
+  completed
+  abandoned
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String   @map("conversation_id")
+  role           MessageRole
+  content        String   @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+  
+  // Relations
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  
+  @@index([conversationId])
+  @@map("messages")
+}
+
+enum MessageRole {
+  user
+  assistant
+  system
+}
+
+// Subscription management
+model Subscription {
+  id                   String   @id @default(cuid())
+  userId               String   @unique @map("user_id")
+  stripeCustomerId     String   @unique @map("stripe_customer_id")
+  stripeSubscriptionId String?  @unique @map("stripe_subscription_id")
+  plan                 Plan     @default(free)
+  status               SubscriptionStatus @default(active)
+  currentPeriodEnd     DateTime? @map("current_period_end")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("subscriptions")
+}
+
+enum Plan {
+  free
+  starter
+  pro
+}
+
+enum SubscriptionStatus {
+  active
+  canceled
+  past_due
+  unpaid
+}
+
+// Flight notifications sent
+model FlightNotification {
+  id           String   @id @default(cuid())
+  alertId      String   @map("alert_id")
+  flightData   Json     @map("flight_data") // Stored flight details
+  sentAt       DateTime @default(now()) @map("sent_at")
+  channel      NotificationChannel
+  status       NotificationStatus @default(sent)
+  
+  // Relations
+  alert        FlightAlert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  
+  @@index([alertId])
+  @@index([sentAt])
+  @@map("flight_notifications")
+}
+
+enum NotificationChannel {
+  sms
+  email
+  push
+}
+
+enum NotificationStatus {
+  sent
+  delivered
+  failed
+}
+```
+
+## Query Patterns
+
+### Select Only Needed Fields
+
+```typescript
+// BAD - Fetches all fields
+const users = await prisma.user.findMany()
+
+// GOOD - Select specific fields
+const users = await prisma.user.findMany({
+  select: {
+    id: true,
+    email: true,
+    name: true,
+  },
+})
+```
+
+### Efficient Relations
+
+```typescript
+// Load alerts with airport info
+const alerts = await prisma.flightAlert.findMany({
+  where: { userId: session.user.id },
+  include: {
+    origin: {
+      select: { code: true, city: true, name: true },
+    },
+    destination: {
+      select: { code: true, city: true, name: true },
+    },
+  },
+  orderBy: { createdAt: 'desc' },
+})
+```
+
+### Pagination
+
+```typescript
+// Cursor-based pagination (preferred for large datasets)
+const alerts = await prisma.flightAlert.findMany({
+  take: 20,
+  skip: 1, // Skip cursor
+  cursor: { id: lastAlertId },
+  where: { userId: session.user.id },
+  orderBy: { createdAt: 'desc' },
+})
+
+// Offset pagination (simpler, OK for small datasets)
+const alerts = await prisma.flightAlert.findMany({
+  take: 20,
+  skip: page * 20,
+  where: { userId: session.user.id },
+})
+```
+
+### Transactions
+
+```typescript
+// Use transactions for related operations
+const [alert, _] = await prisma.$transaction([
+  prisma.flightAlert.create({
+    data: alertData,
+  }),
+  prisma.user.update({
+    where: { id: userId },
+    data: { alertCount: { increment: 1 } },
+  }),
+])
+```
+
+## Migrations
+
+### Creating Migrations
+
+```bash
+# Create migration from schema changes
+npx prisma migrate dev --name add_phone_verification
+
+# Apply migrations in production
+npx prisma migrate deploy
+```
+
+### Migration Best Practices
+
+1. **One change per migration** - Easier to rollback
+2. **Descriptive names** - `add_user_phone_field`, not `update_schema`
+3. **Test locally first** - Always run against local DB before staging
+4. **Backup before production** - Always backup before applying
+
+### Handling Breaking Changes
+
+```prisma
+// Adding a required field - do in steps:
+
+// Step 1: Add as optional
+model User {
+  phone String?
+}
+
+// Step 2: Backfill data
+
+// Step 3: Make required
+model User {
+  phone String
+}
+```
+
+## Seeding
+
+### Airport Data Seed
+
+```typescript
+// prisma/seed.ts
+import { PrismaClient } from '@prisma/client'
+import airportData from './data/airports.json'
+
+const prisma = new PrismaClient()
+
+async function main() {
+  console.log('Seeding airports...')
+  
+  await prisma.airport.createMany({
+    data: airportData,
+    skipDuplicates: true,
+  })
+  
+  console.log(`Seeded ${airportData.length} airports`)
+}
+
+main()
+  .catch((e) => {
+    console.error(e)
+    process.exit(1)
+  })
+  .finally(async () => {
+    await prisma.$disconnect()
+  })
+```
+
+### Running Seeds
+
+```json
+// package.json
+{
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  }
+}
+```
+
+```bash
+npx prisma db seed
+```
+
+## Indexes
+
+Add indexes for frequently queried fields:
+
+```prisma
+model FlightAlert {
+  // ... fields
+  
+  @@index([userId])           // User's alerts
+  @@index([originCode])       // Search by origin
+  @@index([status])           // Filter by status
+  @@index([createdAt])        // Sort by date
+  @@index([userId, status])   // Composite for common query
+}
+```
+
+## Database Client
+
+```typescript
+// src/lib/db/client.ts
+import { PrismaClient } from '@prisma/client'
+
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined
+}
+
+export const prisma = globalForPrisma.prisma ?? new PrismaClient({
+  log: process.env.NODE_ENV === 'development' 
+    ? ['query', 'error', 'warn'] 
+    : ['error'],
+})
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma
+}
+```

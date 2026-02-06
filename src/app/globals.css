@@ -1,26 +1,425 @@
 @import "tailwindcss";
 
+/* ============================================
+   VANDRA DESIGN SYSTEM
+   Earth-tone green palette - Modern & Natural
+   ============================================ */
+
+/* ---------- Color Palette ---------- */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Primary - Soft Sage Green */
+  --color-primary-50: #f6f7f4;
+  --color-primary-100: #e8ebe3;
+  --color-primary-200: #d4dbc9;
+  --color-primary-300: #b5c2a4;
+  --color-primary-400: #95a67e;
+  --color-primary-500: #7a8d62;
+  --color-primary-600: #5f704c;
+  --color-primary-700: #4a573d;
+  --color-primary-800: #3d4734;
+  --color-primary-900: #343d2e;
+  --color-primary-950: #1a2016;
+
+  /* Secondary - Soft Eucalyptus */
+  --color-secondary-50: #f4f7f6;
+  --color-secondary-100: #e2ebe8;
+  --color-secondary-200: #c8d9d3;
+  --color-secondary-300: #a3c0b6;
+  --color-secondary-400: #7ca396;
+  --color-secondary-500: #5d877a;
+  --color-secondary-600: #496c62;
+  --color-secondary-700: #3d5850;
+  --color-secondary-800: #344844;
+  --color-secondary-900: #2d3d3a;
+  --color-secondary-950: #182322;
+
+  /* Accent - Terracotta/Clay (earth warmth) */
+  --color-accent-50: #fef3f2;
+  --color-accent-100: #fee4e2;
+  --color-accent-200: #ffcdc9;
+  --color-accent-300: #fda4a4;
+  --color-accent-400: #f87171;
+  --color-accent-500: #dc6547;
+  --color-accent-600: #c2452a;
+  --color-accent-700: #a33820;
+  --color-accent-800: #86321f;
+  --color-accent-900: #702f20;
+  --color-accent-950: #3c140b;
+
+  /* Highlight - Golden Amber (sunlight through trees) */
+  --color-highlight-50: #fffbeb;
+  --color-highlight-100: #fef3c7;
+  --color-highlight-200: #fde68a;
+  --color-highlight-300: #fcd34d;
+  --color-highlight-400: #fbbf24;
+  --color-highlight-500: #f59e0b;
+  --color-highlight-600: #d97706;
+  --color-highlight-700: #b45309;
+  --color-highlight-800: #92400e;
+  --color-highlight-900: #78350f;
+  --color-highlight-950: #451a03;
+
+  /* Neutrals - Warm Stone */
+  --color-stone-50: #fafaf9;
+  --color-stone-100: #f5f5f4;
+  --color-stone-200: #e7e5e4;
+  --color-stone-300: #d6d3d1;
+  --color-stone-400: #a8a29e;
+  --color-stone-500: #78716c;
+  --color-stone-600: #57534e;
+  --color-stone-700: #44403c;
+  --color-stone-800: #292524;
+  --color-stone-900: #1c1917;
+  --color-stone-950: #0c0a09;
+
+  /* Semantic Colors */
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-info: #14b8a6;
+
+  /* Light Mode */
+  --background: #fefdfb;
+  --background-subtle: #ffffff;
+  --background-muted: var(--color-stone-100);
+  --background-accent: var(--color-primary-50);
+  --foreground: var(--color-stone-900);
+  --foreground-muted: var(--color-stone-600);
+  --foreground-subtle: var(--color-stone-400);
+  --border: var(--color-stone-200);
+  --border-strong: var(--color-stone-300);
+  --ring: var(--color-primary-500);
+
+  /* Shadows - Warm tinted */
+  --shadow-color: 30 20% 10%;
+  --shadow-sm: 0 1px 2px 0 hsl(var(--shadow-color) / 0.04);
+  --shadow-md: 0 4px 6px -1px hsl(var(--shadow-color) / 0.08), 0 2px 4px -2px hsl(var(--shadow-color) / 0.06);
+  --shadow-lg: 0 10px 15px -3px hsl(var(--shadow-color) / 0.1), 0 4px 6px -4px hsl(var(--shadow-color) / 0.08);
+  --shadow-xl: 0 20px 25px -5px hsl(var(--shadow-color) / 0.12), 0 8px 10px -6px hsl(var(--shadow-color) / 0.1);
+
+  /* Border Radius */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
+  --radius-full: 9999px;
+
+  /* Transitions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
+/* ---------- Dark Mode ---------- */
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #0f0f0e;
+    --background-subtle: #1a1918;
+    --background-muted: #262524;
+    --background-accent: var(--color-primary-950);
+    --foreground: var(--color-stone-50);
+    --foreground-muted: var(--color-stone-400);
+    --foreground-subtle: var(--color-stone-500);
+    --border: var(--color-stone-800);
+    --border-strong: var(--color-stone-700);
+    --ring: var(--color-primary-400);
+
+    --shadow-color: 30 30% 4%;
+    --shadow-sm: 0 1px 2px 0 hsl(var(--shadow-color) / 0.2);
+    --shadow-md: 0 4px 6px -1px hsl(var(--shadow-color) / 0.3), 0 2px 4px -2px hsl(var(--shadow-color) / 0.2);
+    --shadow-lg: 0 10px 15px -3px hsl(var(--shadow-color) / 0.35), 0 4px 6px -4px hsl(var(--shadow-color) / 0.25);
+    --shadow-xl: 0 20px 25px -5px hsl(var(--shadow-color) / 0.4), 0 8px 10px -6px hsl(var(--shadow-color) / 0.3);
   }
 }
 
+/* ---------- Tailwind Theme Extension ---------- */
+@theme inline {
+  /* Core */
+  --color-background: var(--background);
+  --color-background-subtle: var(--background-subtle);
+  --color-background-muted: var(--background-muted);
+  --color-background-accent: var(--background-accent);
+  --color-foreground: var(--foreground);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-foreground-subtle: var(--foreground-subtle);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-ring: var(--ring);
+
+  /* Brand */
+  --color-primary: var(--color-primary-500);
+  --color-primary-hover: var(--color-primary-600);
+  --color-primary-active: var(--color-primary-700);
+  --color-secondary: var(--color-secondary-500);
+  --color-accent: var(--color-accent-500);
+  --color-highlight: var(--color-highlight-500);
+  
+  /* Semantic */
+  --color-success: var(--color-success);
+  --color-warning: var(--color-warning);
+  --color-error: var(--color-error);
+  --color-info: var(--color-info);
+
+  /* Typography */
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Playfair Display", ui-serif, Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Shadows */
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-xl: var(--shadow-xl);
+}
+
+/* ---------- Base Styles ---------- */
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01", "ss02", "cv01";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Headings use serif font for editorial feel */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--foreground);
+}
+
+/* Serif utility class */
+.font-serif {
+  font-family: var(--font-serif);
+}
+
+/* Focus styles */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Selection - Green tinted */
+::selection {
+  background: var(--color-primary-200);
+  color: var(--color-primary-900);
+}
+
+@media (prefers-color-scheme: dark) {
+  ::selection {
+    background: var(--color-primary-800);
+    color: var(--color-primary-100);
+  }
+}
+
+/* Scrollbar - Earthy */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background-muted);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-stone-300);
+  border-radius: var(--radius-full);
+  border: 2px solid var(--background-muted);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-stone-400);
+}
+
+@media (prefers-color-scheme: dark) {
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-stone-600);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-stone-500);
+  }
+}
+
+/* ---------- Gradient Utilities ---------- */
+.gradient-earth {
+  background: linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-secondary-600) 100%);
+}
+
+.gradient-sunset {
+  background: linear-gradient(135deg, var(--color-highlight-300) 0%, var(--color-accent-400) 100%);
+}
+
+.gradient-forest {
+  background: linear-gradient(180deg, var(--color-primary-500) 0%, var(--color-primary-800) 100%);
+}
+
+.gradient-mesh {
+  background: 
+    radial-gradient(at 40% 20%, var(--color-primary-200) 0px, transparent 50%),
+    radial-gradient(at 80% 0%, var(--color-secondary-200) 0px, transparent 50%),
+    radial-gradient(at 0% 50%, var(--color-highlight-100) 0px, transparent 50%),
+    radial-gradient(at 80% 50%, var(--color-accent-100) 0px, transparent 50%),
+    radial-gradient(at 0% 100%, var(--color-primary-100) 0px, transparent 50%),
+    var(--background);
+}
+
+/* ---------- Animation Keyframes ---------- */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fade-up {
+  from { 
+    opacity: 0; 
+    transform: translateY(16px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+}
+
+@keyframes fade-down {
+  from { 
+    opacity: 0; 
+    transform: translateY(-16px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+}
+
+@keyframes slide-in-right {
+  from { 
+    opacity: 0; 
+    transform: translateX(16px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateX(0); 
+  }
+}
+
+@keyframes scale-in {
+  from { 
+    opacity: 0; 
+    transform: scale(0.95); 
+  }
+  to { 
+    opacity: 1; 
+    transform: scale(1); 
+  }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes bounce-subtle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Animation utilities */
+.animate-fade-in {
+  animation: fade-in var(--transition-base) ease-out;
+}
+
+.animate-fade-up {
+  animation: fade-up var(--transition-slow) ease-out;
+}
+
+.animate-fade-down {
+  animation: fade-down var(--transition-slow) ease-out;
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right var(--transition-slow) ease-out;
+}
+
+.animate-scale-in {
+  animation: scale-in var(--transition-base) ease-out;
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+.animate-bounce-subtle {
+  animation: bounce-subtle 2s ease-in-out infinite;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--background-muted) 0%,
+    var(--background-subtle) 50%,
+    var(--background-muted) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* Stagger children animations */
+.stagger-children > * {
+  animation: fade-up var(--transition-slow) ease-out backwards;
+}
+
+.stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-children > *:nth-child(2) { animation-delay: 75ms; }
+.stagger-children > *:nth-child(3) { animation-delay: 150ms; }
+.stagger-children > *:nth-child(4) { animation-delay: 225ms; }
+.stagger-children > *:nth-child(5) { animation-delay: 300ms; }
+.stagger-children > *:nth-child(6) { animation-delay: 375ms; }
+.stagger-children > *:nth-child(7) { animation-delay: 450ms; }
+.stagger-children > *:nth-child(8) { animation-delay: 525ms; }
+
+/* ---------- Decorative Elements ---------- */
+.pattern-dots {
+  background-image: radial-gradient(var(--color-stone-300) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .pattern-dots {
+    background-image: radial-gradient(var(--color-stone-700) 1px, transparent 1px);
+  }
+}
+
+.pattern-grid {
+  background-image: 
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 40px 40px;
 }

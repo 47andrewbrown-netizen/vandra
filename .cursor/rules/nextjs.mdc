@@ -1,0 +1,330 @@
+---
+description: Next.js App Router patterns and conventions for Vandra
+globs: ["src/app/**/*", "src/components/**/*", "src/middleware.ts"]
+alwaysApply: false
+---
+
+# Next.js Rules
+
+## App Router Conventions
+
+### File Structure
+
+```
+src/app/
+├── (auth)/                 # Route group (no URL segment)
+│   ├── login/
+│   │   └── page.tsx
+│   ├── signup/
+│   │   └── page.tsx
+│   └── layout.tsx          # Shared auth layout
+├── (dashboard)/
+│   ├── alerts/
+│   │   ├── [id]/
+│   │   │   └── page.tsx    # Dynamic route
+│   │   └── page.tsx
+│   ├── chat/
+│   │   └── page.tsx
+│   └── layout.tsx          # Dashboard layout with sidebar
+├── api/
+│   ├── auth/
+│   │   └── [...nextauth]/
+│   │       └── route.ts
+│   ├── flights/
+│   │   └── search/
+│   │       └── route.ts
+│   └── webhooks/
+│       ├── stripe/
+│       │   └── route.ts
+│       └── twilio/
+│           └── route.ts
+├── layout.tsx              # Root layout
+├── page.tsx                # Landing page
+└── not-found.tsx           # 404 page
+```
+
+### Server vs Client Components
+
+**Default to Server Components.** Only add 'use client' when necessary:
+
+```typescript
+// Server Component (default) - can fetch data directly
+export default async function AlertsPage() {
+  const alerts = await getAlerts()
+  
+  return (
+    <div>
+      {alerts.map(alert => (
+        <AlertCard key={alert.id} alert={alert} />
+      ))}
+    </div>
+  )
+}
+
+// Client Component - needed for interactivity
+'use client'
+
+import { useState } from 'react'
+
+export function ChatInterface() {
+  const [messages, setMessages] = useState<Message[]>([])
+  
+  // Interactive chat logic
+}
+```
+
+**When to use 'use client':**
+- useState, useEffect, useRef
+- Browser APIs (localStorage, geolocation)
+- Event handlers that modify state
+- Third-party libraries that require browser
+
+### Data Fetching
+
+#### Server Components
+
+```typescript
+// Fetch in Server Components directly
+async function FlightDeals() {
+  const deals = await prisma.flight.findMany({
+    where: { discount: { gte: 20 } },
+    take: 10,
+  })
+  
+  return <DealsList deals={deals} />
+}
+```
+
+#### Route Handlers (API Routes)
+
+```typescript
+// src/app/api/flights/search/route.ts
+import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
+
+const SearchSchema = z.object({
+  origin: z.string().length(3),
+  destination: z.string().length(3).optional(),
+})
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const params = SearchSchema.parse(body)
+    
+    const flights = await searchFlights(params)
+    
+    return NextResponse.json({ data: flights })
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: { code: 'VALIDATION_ERROR', details: error.errors } },
+        { status: 400 }
+      )
+    }
+    
+    console.error('Flight search error:', error)
+    return NextResponse.json(
+      { error: { code: 'INTERNAL_ERROR', message: 'Search failed' } },
+      { status: 500 }
+    )
+  }
+}
+```
+
+### Caching and Revalidation
+
+```typescript
+// Static data - cache indefinitely
+const airports = await fetch('https://api.example.com/airports', {
+  cache: 'force-cache',
+})
+
+// Dynamic data - revalidate periodically
+const deals = await fetch('https://api.example.com/deals', {
+  next: { revalidate: 3600 }, // Revalidate every hour
+})
+
+// Always fresh
+const userAlerts = await fetch('/api/alerts', {
+  cache: 'no-store',
+})
+```
+
+### Metadata
+
+```typescript
+// Static metadata
+export const metadata: Metadata = {
+  title: 'Flight Alerts | Vandra',
+  description: 'Manage your personalized flight deal alerts',
+}
+
+// Dynamic metadata
+export async function generateMetadata({ params }): Promise<Metadata> {
+  const alert = await getAlert(params.id)
+  
+  return {
+    title: `${alert.origin} to ${alert.destination} | Vandra`,
+  }
+}
+```
+
+## Component Patterns
+
+### Layout Components
+
+```typescript
+// src/app/(dashboard)/layout.tsx
+import { redirect } from 'next/navigation'
+import { getSession } from '@/lib/auth'
+import { Sidebar } from '@/components/Sidebar'
+
+export default async function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  const session = await getSession()
+  
+  if (!session) {
+    redirect('/login')
+  }
+  
+  return (
+    <div className="flex min-h-screen">
+      <Sidebar user={session.user} />
+      <main className="flex-1 p-6">{children}</main>
+    </div>
+  )
+}
+```
+
+### Loading States
+
+```typescript
+// src/app/(dashboard)/alerts/loading.tsx
+export default function AlertsLoading() {
+  return (
+    <div className="space-y-4">
+      {[...Array(3)].map((_, i) => (
+        <div key={i} className="h-24 rounded-lg bg-gray-200 animate-pulse" />
+      ))}
+    </div>
+  )
+}
+```
+
+### Error Boundaries
+
+```typescript
+// src/app/(dashboard)/alerts/error.tsx
+'use client'
+
+export default function AlertsError({
+  error,
+  reset,
+}: {
+  error: Error
+  reset: () => void
+}) {
+  return (
+    <div className="text-center py-12">
+      <h2 className="text-xl font-semibold">Something went wrong</h2>
+      <p className="text-gray-600 mt-2">{error.message}</p>
+      <button
+        onClick={reset}
+        className="mt-4 px-4 py-2 bg-blue-600 text-white rounded"
+      >
+        Try again
+      </button>
+    </div>
+  )
+}
+```
+
+## Server Actions
+
+```typescript
+// src/app/actions/alerts.ts
+'use server'
+
+import { revalidatePath } from 'next/cache'
+import { z } from 'zod'
+
+const CreateAlertSchema = z.object({
+  origin: z.string().length(3),
+  destination: z.string().length(3).optional(),
+  maxPrice: z.number().positive().optional(),
+})
+
+export async function createAlert(formData: FormData) {
+  const session = await getSession()
+  if (!session) throw new Error('Unauthorized')
+  
+  const validated = CreateAlertSchema.parse({
+    origin: formData.get('origin'),
+    destination: formData.get('destination'),
+    maxPrice: formData.get('maxPrice') 
+      ? Number(formData.get('maxPrice')) 
+      : undefined,
+  })
+  
+  await prisma.alert.create({
+    data: {
+      ...validated,
+      userId: session.user.id,
+    },
+  })
+  
+  revalidatePath('/alerts')
+}
+```
+
+## Middleware
+
+```typescript
+// src/middleware.ts
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+import { getToken } from 'next-auth/jwt'
+
+export async function middleware(request: NextRequest) {
+  const token = await getToken({ req: request })
+  const isAuthPage = request.nextUrl.pathname.startsWith('/login') ||
+                     request.nextUrl.pathname.startsWith('/signup')
+  
+  // Redirect authenticated users away from auth pages
+  if (isAuthPage && token) {
+    return NextResponse.redirect(new URL('/dashboard', request.url))
+  }
+  
+  // Protect dashboard routes
+  if (request.nextUrl.pathname.startsWith('/dashboard') && !token) {
+    return NextResponse.redirect(new URL('/login', request.url))
+  }
+  
+  return NextResponse.next()
+}
+
+export const config = {
+  matcher: ['/dashboard/:path*', '/login', '/signup'],
+}
+```
+
+## Performance Best Practices
+
+1. **Use Server Components** for data fetching and static content
+2. **Colocate data fetching** with components that need it
+3. **Stream with Suspense** for better perceived performance
+4. **Use `next/image`** for all images
+5. **Implement ISR** for semi-static content
+6. **Lazy load** below-the-fold components
+
+```typescript
+import dynamic from 'next/dynamic'
+
+const ChatWidget = dynamic(() => import('@/components/ChatWidget'), {
+  loading: () => <ChatSkeleton />,
+})
+```

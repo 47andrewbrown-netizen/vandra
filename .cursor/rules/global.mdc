@@ -1,0 +1,227 @@
+---
+description: Global rules for the Vandra project - a flight deal SaaS platform
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# Vandra Global Rules
+
+## Company Context
+
+**Vandra** is a SaaS platform that helps users find personalized flight deals through:
+- Conversational AI that understands travel preferences via natural language
+- Automated flight monitoring based on user-specified criteria
+- SMS notifications when matching deals are found
+- Subscription-based pricing with Stripe
+
+**Target Users:** Travelers looking for flight deals from their home airport
+**Business Model:** Subscription SaaS with tiered pricing
+
+## Development Context
+
+- **Team Size:** Solo developer
+- **Priority:** Ship working features quickly while maintaining quality
+- **Tech Stack:** Next.js 14+, TypeScript, PostgreSQL, Prisma, Vercel
+
+## Code Quality Standards
+
+### General Principles
+
+1. **Simplicity First:** Write clear, readable code over clever solutions
+2. **Type Safety:** Leverage TypeScript's type system fully
+3. **Early Returns:** Use guard clauses to reduce nesting
+4. **Single Responsibility:** Each function/component does one thing well
+5. **DRY with Judgment:** Extract repeated code, but don't over-abstract
+
+### File Organization
+
+```
+src/
+├── app/                    # Next.js App Router pages and API routes
+│   ├── (auth)/            # Auth-related pages (grouped)
+│   ├── (dashboard)/       # Dashboard pages (grouped)
+│   ├── api/               # API route handlers
+│   └── layout.tsx         # Root layout
+├── components/
+│   ├── ui/                # Primitive UI components
+│   └── features/          # Feature-specific components
+├── lib/                   # Utility functions and shared logic
+├── services/              # External service integrations
+├── hooks/                 # Custom React hooks
+└── types/                 # TypeScript type definitions
+```
+
+### Naming Conventions
+
+| Type | Convention | Example |
+|------|------------|---------|
+| Files (components) | PascalCase | `FlightCard.tsx` |
+| Files (utilities) | camelCase | `formatPrice.ts` |
+| Files (API routes) | kebab-case folders | `api/flight-alerts/route.ts` |
+| Components | PascalCase | `FlightSearchForm` |
+| Functions | camelCase | `calculateDiscount` |
+| Constants | SCREAMING_SNAKE | `MAX_ALERTS_PER_USER` |
+| Types/Interfaces | PascalCase | `FlightAlert`, `UserPreferences` |
+| Database tables | snake_case | `flight_alerts`, `user_preferences` |
+
+### Import Order
+
+Organize imports in this order, separated by blank lines:
+
+```typescript
+// 1. React/Next.js
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+
+// 2. External libraries
+import { z } from 'zod'
+import { format } from 'date-fns'
+
+// 3. Internal aliases (@/)
+import { Button } from '@/components/ui/Button'
+import { useAuth } from '@/hooks/useAuth'
+
+// 4. Relative imports
+import { FlightCard } from './FlightCard'
+
+// 5. Types (with 'type' keyword)
+import type { Flight } from '@/types'
+```
+
+## Git Conventions
+
+### Commit Messages
+
+Use conventional commits format:
+
+```
+<type>(<scope>): <subject>
+
+[optional body]
+
+[optional footer]
+```
+
+**Types:**
+- `feat`: New feature
+- `fix`: Bug fix
+- `docs`: Documentation
+- `style`: Formatting (no code change)
+- `refactor`: Code restructuring
+- `test`: Adding tests
+- `chore`: Maintenance tasks
+
+**Examples:**
+```
+feat(alerts): add SMS notification for flight deals
+fix(chat): resolve message ordering in conversation
+docs(api): document flight search endpoint
+```
+
+### Branch Naming
+
+```
+<type>/<short-description>
+
+Examples:
+feat/chat-interface
+fix/alert-timezone
+refactor/flight-search-service
+```
+
+## Error Handling
+
+### API Routes
+
+Always return consistent error responses:
+
+```typescript
+// Success
+return NextResponse.json({ data: result }, { status: 200 })
+
+// Client error
+return NextResponse.json(
+  { error: { code: 'VALIDATION_ERROR', message: 'Invalid airport code' } },
+  { status: 400 }
+)
+
+// Server error
+return NextResponse.json(
+  { error: { code: 'INTERNAL_ERROR', message: 'Something went wrong' } },
+  { status: 500 }
+)
+```
+
+### Client-Side
+
+Use error boundaries for component errors and try-catch for async operations:
+
+```typescript
+try {
+  const result = await searchFlights(params)
+  return result
+} catch (error) {
+  console.error('Flight search failed:', error)
+  throw new Error('Unable to search flights. Please try again.')
+}
+```
+
+## Environment Variables
+
+### Naming
+
+- Prefix public variables with `NEXT_PUBLIC_`
+- Use descriptive names: `STRIPE_SECRET_KEY`, not `SK`
+- Document all variables in `.env.example`
+
+### Required Variables
+
+```env
+# Database
+DATABASE_URL=
+
+# Authentication
+NEXTAUTH_SECRET=
+NEXTAUTH_URL=
+
+# Stripe
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
+
+# Twilio
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+TWILIO_PHONE_NUMBER=
+
+# AI
+ANTHROPIC_API_KEY=
+
+# Flight API
+AMADEUS_API_KEY=
+AMADEUS_API_SECRET=
+```
+
+## Performance Guidelines
+
+1. **Server Components by Default:** Only use 'use client' when necessary
+2. **Dynamic Imports:** Lazy load heavy components
+3. **Image Optimization:** Use next/image for all images
+4. **Caching:** Leverage Next.js caching and revalidation
+5. **Database:** Use Prisma's select to fetch only needed fields
+
+## Accessibility Requirements
+
+1. All interactive elements must be keyboard accessible
+2. Images must have meaningful alt text
+3. Form inputs must have associated labels
+4. Color contrast must meet WCAG 2.1 AA standards
+5. Use semantic HTML elements
+
+## Comments Policy
+
+- **Do:** Explain *why*, not *what*
+- **Do:** Document complex business logic
+- **Do:** Add TODO comments with context: `// TODO(username): reason`
+- **Don't:** Comment obvious code
+- **Don't:** Leave commented-out code in production

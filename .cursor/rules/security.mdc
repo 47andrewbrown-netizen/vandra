@@ -1,0 +1,376 @@
+---
+description: Security rules and PCI compliance for Vandra payment processing
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# Security Rules
+
+## Critical: Payment Data Handling
+
+Vandra processes payments via Stripe. Follow these rules strictly:
+
+### Never Handle Raw Card Data
+
+```typescript
+// FORBIDDEN - Never do this
+const cardNumber = formData.get('cardNumber')
+await saveToDatabase({ cardNumber }) // NEVER
+
+// CORRECT - Use Stripe Elements
+// Card data goes directly to Stripe, never touches our servers
+import { CardElement, useStripe } from '@stripe/react-stripe-js'
+
+function PaymentForm() {
+  const stripe = useStripe()
+  
+  const handleSubmit = async () => {
+    // Payment method is created client-side, sent to Stripe
+    const { paymentMethod } = await stripe.createPaymentMethod({
+      type: 'card',
+      card: cardElement,
+    })
+    
+    // Only send the paymentMethod.id to your server
+    await fetch('/api/subscribe', {
+      body: JSON.stringify({ paymentMethodId: paymentMethod.id }),
+    })
+  }
+}
+```
+
+### Stripe Webhook Verification
+
+Always verify webhook signatures:
+
+```typescript
+// src/app/api/webhooks/stripe/route.ts
+import { headers } from 'next/headers'
+import Stripe from 'stripe'
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
+
+export async function POST(request: Request) {
+  const body = await request.text()
+  const signature = headers().get('stripe-signature')!
+  
+  let event: Stripe.Event
+  
+  try {
+    event = stripe.webhooks.constructEvent(
+      body,
+      signature,
+      process.env.STRIPE_WEBHOOK_SECRET!
+    )
+  } catch (err) {
+    console.error('Webhook signature verification failed')
+    return new Response('Invalid signature', { status: 400 })
+  }
+  
+  // Process verified event
+  switch (event.type) {
+    case 'customer.subscription.created':
+      // Handle subscription
+      break
+  }
+  
+  return new Response('OK', { status: 200 })
+}
+```
+
+## Authentication Security
+
+### Password Requirements
+
+- Minimum 8 characters
+- Use bcrypt with cost factor 12+
+- Never store plaintext passwords
+- Never log passwords (even hashed)
+
+```typescript
+import bcrypt from 'bcrypt'
+
+const SALT_ROUNDS = 12
+
+async function hashPassword(password: string): Promise<string> {
+  return bcrypt.hash(password, SALT_ROUNDS)
+}
+
+async function verifyPassword(password: string, hash: string): Promise<boolean> {
+  return bcrypt.compare(password, hash)
+}
+```
+
+### Session Security
+
+```typescript
+// next-auth configuration
+export const authOptions: NextAuthOptions = {
+  session: {
+    strategy: 'jwt',
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+  },
+  cookies: {
+    sessionToken: {
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+      },
+    },
+  },
+}
+```
+
+### Protected Routes
+
+Always verify authentication server-side:
+
+```typescript
+// In Server Components
+import { getServerSession } from 'next-auth'
+import { redirect } from 'next/navigation'
+
+export default async function ProtectedPage() {
+  const session = await getServerSession(authOptions)
+  
+  if (!session) {
+    redirect('/login')
+  }
+  
+  // Render protected content
+}
+
+// In API Routes
+export async function GET(request: NextRequest) {
+  const session = await getServerSession(authOptions)
+  
+  if (!session) {
+    return NextResponse.json(
+      { error: { code: 'UNAUTHORIZED', message: 'Not authenticated' } },
+      { status: 401 }
+    )
+  }
+  
+  // Process authenticated request
+}
+```
+
+## Input Validation
+
+### Validate All External Input
+
+```typescript
+import { z } from 'zod'
+
+// Define strict schemas
+const AirportCodeSchema = z.string().length(3).regex(/^[A-Z]+$/)
+
+const FlightAlertSchema = z.object({
+  origin: AirportCodeSchema,
+  destination: AirportCodeSchema.optional(),
+  maxPrice: z.number().positive().max(10000).optional(),
+  departureAfter: z.date().min(new Date()).optional(),
+})
+
+// Validate at API boundaries
+export async function POST(request: NextRequest) {
+  const body = await request.json()
+  
+  const result = FlightAlertSchema.safeParse(body)
+  
+  if (!result.success) {
+    return NextResponse.json(
+      { error: { code: 'VALIDATION_ERROR', details: result.error.flatten() } },
+      { status: 400 }
+    )
+  }
+  
+  // Use validated data
+  const alert = result.data
+}
+```
+
+### SQL Injection Prevention
+
+Always use parameterized queries (Prisma does this automatically):
+
+```typescript
+// SAFE - Prisma uses parameterized queries
+const user = await prisma.user.findUnique({
+  where: { email: userInput },
+})
+
+// DANGEROUS - Never do this
+const user = await prisma.$queryRawUnsafe(
+  `SELECT * FROM users WHERE email = '${userInput}'`  // NEVER
+)
+
+// SAFE - If you must use raw SQL
+const user = await prisma.$queryRaw`
+  SELECT * FROM users WHERE email = ${userInput}
+`
+```
+
+### XSS Prevention
+
+React escapes by default, but be careful with:
+
+```typescript
+// DANGEROUS - Never use with user input
+<div dangerouslySetInnerHTML={{ __html: userInput }} />
+
+// SAFE - React auto-escapes
+<div>{userInput}</div>
+
+// If HTML is necessary, sanitize first
+import DOMPurify from 'dompurify'
+const sanitized = DOMPurify.sanitize(userInput)
+```
+
+## Environment Variables
+
+### Secret Management
+
+```typescript
+// NEVER commit secrets
+// .env.local (gitignored)
+STRIPE_SECRET_KEY=sk_live_xxxxx
+
+// DO export safely for client (public only)
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_xxxxx
+
+// Access server secrets
+const stripeKey = process.env.STRIPE_SECRET_KEY
+if (!stripeKey) {
+  throw new Error('STRIPE_SECRET_KEY is required')
+}
+```
+
+### Required .env.example
+
+```env
+# Database
+DATABASE_URL=postgresql://...
+
+# Auth (generate with: openssl rand -base64 32)
+NEXTAUTH_SECRET=
+NEXTAUTH_URL=http://localhost:3000
+
+# Stripe
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
+
+# Twilio
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+TWILIO_PHONE_NUMBER=
+
+# AI
+ANTHROPIC_API_KEY=
+
+# Flight API
+AMADEUS_API_KEY=
+AMADEUS_API_SECRET=
+```
+
+## Logging Security
+
+### Never Log Sensitive Data
+
+```typescript
+// FORBIDDEN
+console.log('User password:', password)
+console.log('Card number:', cardNumber)
+console.log('API key:', apiKey)
+
+// CORRECT - Log safely
+console.log('User login attempt:', { email: user.email, timestamp: new Date() })
+console.log('Payment processed:', { 
+  userId: user.id, 
+  amount: payment.amount,
+  last4: paymentMethod.card.last4,  // Only last 4 digits
+})
+```
+
+### Error Logging
+
+```typescript
+// Don't expose internal errors to clients
+try {
+  await processPayment()
+} catch (error) {
+  // Log full error internally
+  console.error('Payment error:', error)
+  
+  // Return generic message to client
+  return NextResponse.json(
+    { error: { code: 'PAYMENT_FAILED', message: 'Payment could not be processed' } },
+    { status: 500 }
+  )
+}
+```
+
+## Rate Limiting
+
+Implement rate limiting for sensitive endpoints:
+
+```typescript
+import { Ratelimit } from '@upstash/ratelimit'
+import { Redis } from '@upstash/redis'
+
+const ratelimit = new Ratelimit({
+  redis: Redis.fromEnv(),
+  limiter: Ratelimit.slidingWindow(10, '1 m'), // 10 requests per minute
+})
+
+export async function POST(request: NextRequest) {
+  const ip = request.ip ?? '127.0.0.1'
+  const { success, remaining } = await ratelimit.limit(ip)
+  
+  if (!success) {
+    return NextResponse.json(
+      { error: { code: 'RATE_LIMITED', message: 'Too many requests' } },
+      { status: 429 }
+    )
+  }
+  
+  // Process request
+}
+```
+
+## CORS Configuration
+
+```typescript
+// next.config.js
+const nextConfig = {
+  async headers() {
+    return [
+      {
+        source: '/api/:path*',
+        headers: [
+          { key: 'Access-Control-Allow-Origin', value: process.env.ALLOWED_ORIGIN || '' },
+          { key: 'Access-Control-Allow-Methods', value: 'GET, POST, PUT, DELETE, OPTIONS' },
+          { key: 'Access-Control-Allow-Headers', value: 'Content-Type, Authorization' },
+        ],
+      },
+    ]
+  },
+}
+```
+
+## Security Checklist
+
+Before deploying, verify:
+
+- [ ] All secrets in environment variables, not code
+- [ ] HTTPS enforced in production
+- [ ] Authentication required for all protected routes
+- [ ] Input validation on all API endpoints
+- [ ] Stripe webhook signatures verified
+- [ ] No sensitive data in logs
+- [ ] Rate limiting on auth endpoints
+- [ ] CSRF protection enabled
+- [ ] Security headers configured
+- [ ] Dependencies audited (`npm audit`)

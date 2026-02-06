@@ -1,0 +1,406 @@
+---
+description: Testing standards and patterns for Vandra
+globs: ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "tests/**/*"]
+alwaysApply: false
+---
+
+# Testing Rules
+
+## Testing Stack
+
+- **Unit/Integration Tests:** Vitest
+- **E2E Tests:** Playwright
+- **Component Tests:** React Testing Library
+- **API Mocking:** MSW (Mock Service Worker)
+
+## Test File Organization
+
+```
+src/
+├── components/
+│   └── FlightCard/
+│       ├── FlightCard.tsx
+│       └── FlightCard.test.tsx     # Colocated unit test
+├── lib/
+│   └── pricing/
+│       ├── calculateDiscount.ts
+│       └── calculateDiscount.test.ts
+└── app/
+    └── api/
+        └── flights/
+            └── route.test.ts       # API route tests
+
+tests/
+├── e2e/                            # Playwright E2E tests
+│   ├── auth.spec.ts
+│   ├── alerts.spec.ts
+│   └── chat.spec.ts
+├── fixtures/                       # Shared test data
+│   ├── users.ts
+│   ├── flights.ts
+│   └── airports.ts
+└── utils/                          # Test utilities
+    ├── db.ts
+    └── render.tsx
+```
+
+## Unit Tests
+
+### Test Structure (AAA Pattern)
+
+```typescript
+import { describe, it, expect } from 'vitest'
+import { calculateDiscount } from './calculateDiscount'
+
+describe('calculateDiscount', () => {
+  it('calculates percentage discount correctly', () => {
+    // Arrange
+    const originalPrice = 500
+    const currentPrice = 350
+    
+    // Act
+    const discount = calculateDiscount(originalPrice, currentPrice)
+    
+    // Assert
+    expect(discount).toBe(30)
+  })
+  
+  it('returns 0 when prices are equal', () => {
+    expect(calculateDiscount(500, 500)).toBe(0)
+  })
+  
+  it('handles negative discount (price increase)', () => {
+    expect(calculateDiscount(500, 600)).toBe(-20)
+  })
+})
+```
+
+### Naming Conventions
+
+```typescript
+// Describe: what you're testing
+describe('FlightSearchService', () => {
+  
+  // Nested describe for methods/features
+  describe('searchFlights', () => {
+    
+    // It: should [expected behavior] when [condition]
+    it('should return flights matching origin airport', () => {})
+    it('should filter by max price when provided', () => {})
+    it('should throw error when origin is invalid', () => {})
+  })
+})
+```
+
+## Component Tests
+
+### Using React Testing Library
+
+```typescript
+import { render, screen, fireEvent } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { FlightCard } from './FlightCard'
+
+describe('FlightCard', () => {
+  const mockFlight = {
+    id: '1',
+    origin: 'SLC',
+    destination: 'LAX',
+    price: 199,
+    departureDate: new Date('2026-03-15'),
+  }
+  
+  it('renders flight details', () => {
+    render(<FlightCard flight={mockFlight} />)
+    
+    expect(screen.getByText('SLC → LAX')).toBeInTheDocument()
+    expect(screen.getByText('$199')).toBeInTheDocument()
+  })
+  
+  it('calls onSelect when clicked', async () => {
+    const onSelect = vi.fn()
+    const user = userEvent.setup()
+    
+    render(<FlightCard flight={mockFlight} onSelect={onSelect} />)
+    
+    await user.click(screen.getByRole('button', { name: /select/i }))
+    
+    expect(onSelect).toHaveBeenCalledWith(mockFlight)
+  })
+  
+  it('displays discount badge when discounted', () => {
+    render(
+      <FlightCard 
+        flight={{ ...mockFlight, originalPrice: 299 }} 
+      />
+    )
+    
+    expect(screen.getByText('33% off')).toBeInTheDocument()
+  })
+})
+```
+
+### Query Priority
+
+Use queries in this order of preference:
+
+1. `getByRole` - Best for accessibility
+2. `getByLabelText` - For form fields
+3. `getByPlaceholderText` - For inputs
+4. `getByText` - For non-interactive elements
+5. `getByTestId` - Last resort
+
+```typescript
+// Preferred
+screen.getByRole('button', { name: /submit/i })
+screen.getByRole('textbox', { name: /email/i })
+
+// Avoid unless necessary
+screen.getByTestId('submit-button')
+```
+
+## API Route Tests
+
+```typescript
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { POST } from './route'
+import { NextRequest } from 'next/server'
+import { prisma } from '@/lib/db/client'
+
+// Mock Prisma
+vi.mock('@/lib/db/client', () => ({
+  prisma: {
+    flightAlert: {
+      create: vi.fn(),
+      findMany: vi.fn(),
+    },
+  },
+}))
+
+// Mock auth
+vi.mock('@/lib/auth', () => ({
+  getSession: vi.fn(() => ({ user: { id: 'user-1' } })),
+}))
+
+describe('POST /api/alerts', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+  
+  it('creates a flight alert with valid data', async () => {
+    const mockAlert = { id: 'alert-1', originCode: 'SLC' }
+    vi.mocked(prisma.flightAlert.create).mockResolvedValue(mockAlert)
+    
+    const request = new NextRequest('http://localhost/api/alerts', {
+      method: 'POST',
+      body: JSON.stringify({
+        origin: 'SLC',
+        destination: 'LAX',
+        maxPrice: 300,
+      }),
+    })
+    
+    const response = await POST(request)
+    const data = await response.json()
+    
+    expect(response.status).toBe(201)
+    expect(data.data).toEqual(mockAlert)
+  })
+  
+  it('returns 400 for invalid airport code', async () => {
+    const request = new NextRequest('http://localhost/api/alerts', {
+      method: 'POST',
+      body: JSON.stringify({
+        origin: 'INVALID',
+      }),
+    })
+    
+    const response = await POST(request)
+    
+    expect(response.status).toBe(400)
+  })
+  
+  it('returns 401 when not authenticated', async () => {
+    vi.mocked(getSession).mockResolvedValueOnce(null)
+    
+    const request = new NextRequest('http://localhost/api/alerts', {
+      method: 'POST',
+      body: JSON.stringify({ origin: 'SLC' }),
+    })
+    
+    const response = await POST(request)
+    
+    expect(response.status).toBe(401)
+  })
+})
+```
+
+## E2E Tests (Playwright)
+
+```typescript
+// tests/e2e/alerts.spec.ts
+import { test, expect } from '@playwright/test'
+
+test.describe('Flight Alerts', () => {
+  test.beforeEach(async ({ page }) => {
+    // Login before each test
+    await page.goto('/login')
+    await page.fill('[name="email"]', 'test@example.com')
+    await page.fill('[name="password"]', 'password123')
+    await page.click('button[type="submit"]')
+    await page.waitForURL('/dashboard')
+  })
+  
+  test('user can create a new flight alert', async ({ page }) => {
+    await page.goto('/dashboard/alerts')
+    await page.click('text=Create Alert')
+    
+    // Fill alert form
+    await page.fill('[name="origin"]', 'SLC')
+    await page.fill('[name="destination"]', 'LAX')
+    await page.fill('[name="maxPrice"]', '300')
+    
+    await page.click('button[type="submit"]')
+    
+    // Verify alert created
+    await expect(page.getByText('SLC → LAX')).toBeVisible()
+    await expect(page.getByText('Max: $300')).toBeVisible()
+  })
+  
+  test('user can pause an alert', async ({ page }) => {
+    await page.goto('/dashboard/alerts')
+    
+    // Find and pause the first alert
+    await page.click('[data-testid="alert-menu"]')
+    await page.click('text=Pause')
+    
+    await expect(page.getByText('Paused')).toBeVisible()
+  })
+})
+```
+
+## Test Fixtures
+
+```typescript
+// tests/fixtures/flights.ts
+import type { Flight, FlightAlert } from '@prisma/client'
+
+export const mockFlights: Flight[] = [
+  {
+    id: 'flight-1',
+    origin: 'SLC',
+    destination: 'LAX',
+    price: 199,
+    originalPrice: 299,
+    airline: 'Delta',
+    departureDate: new Date('2026-03-15'),
+    returnDate: new Date('2026-03-22'),
+  },
+  {
+    id: 'flight-2',
+    origin: 'SLC',
+    destination: 'JFK',
+    price: 349,
+    originalPrice: 450,
+    airline: 'JetBlue',
+    departureDate: new Date('2026-04-01'),
+    returnDate: null,
+  },
+]
+
+export const mockAlert: FlightAlert = {
+  id: 'alert-1',
+  userId: 'user-1',
+  originCode: 'SLC',
+  destinationCode: 'LAX',
+  maxPrice: 300,
+  minDiscount: null,
+  departureAfter: null,
+  departureBefore: null,
+  status: 'active',
+  createdAt: new Date(),
+  updatedAt: new Date(),
+}
+
+export function createMockFlight(overrides: Partial<Flight> = {}): Flight {
+  return {
+    ...mockFlights[0],
+    id: `flight-${Math.random().toString(36).slice(2)}`,
+    ...overrides,
+  }
+}
+```
+
+## Mocking External Services
+
+```typescript
+// tests/mocks/handlers.ts
+import { http, HttpResponse } from 'msw'
+
+export const handlers = [
+  // Mock flight search API
+  http.get('https://api.amadeus.com/v2/shopping/flight-offers', () => {
+    return HttpResponse.json({
+      data: [
+        {
+          id: '1',
+          price: { total: '199.00' },
+          itineraries: [/* ... */],
+        },
+      ],
+    })
+  }),
+  
+  // Mock Stripe
+  http.post('https://api.stripe.com/v1/payment_intents', () => {
+    return HttpResponse.json({
+      id: 'pi_123',
+      client_secret: 'secret_123',
+      status: 'requires_payment_method',
+    })
+  }),
+]
+```
+
+## Coverage Requirements
+
+Aim for these coverage thresholds:
+
+```typescript
+// vitest.config.ts
+export default defineConfig({
+  test: {
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html'],
+      thresholds: {
+        statements: 80,
+        branches: 75,
+        functions: 80,
+        lines: 80,
+      },
+      exclude: [
+        'node_modules/',
+        'tests/',
+        '**/*.d.ts',
+        'prisma/',
+      ],
+    },
+  },
+})
+```
+
+## Test Commands
+
+```json
+// package.json
+{
+  "scripts": {
+    "test": "vitest",
+    "test:watch": "vitest watch",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
+  }
+}
+```
